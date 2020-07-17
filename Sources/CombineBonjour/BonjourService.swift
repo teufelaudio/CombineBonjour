@@ -15,17 +15,24 @@ public struct BonjourServiceType: Publisher {
 
     private let onReceive: (AnySubscriber<Output, Failure>) -> Void
     private let getName: () -> String
+    private let getTxtRecordData: () -> Data?
     public var name: String {
         getName()
     }
 
-    public init<P: Publisher>(publisher: P, getName: @escaping () -> String) where P.Output == Output, P.Failure == Failure {
+    public var txtRecordData: Data? {
+        getTxtRecordData()
+    }
+
+    public init<P: Publisher>(publisher: P, getName: @escaping () -> String, getTxtRecordData: @escaping () -> Data?)
+    where P.Output == Output, P.Failure == Failure {
         onReceive = publisher.receive(subscriber:)
         self.getName = getName
+        self.getTxtRecordData = getTxtRecordData
     }
 
     public init(bonjourService: BonjourService) {
-        self.init(publisher: bonjourService, getName: { bonjourService.name })
+        self.init(publisher: bonjourService, getName: { bonjourService.name }, getTxtRecordData: { bonjourService.txtRecordData })
     }
 
     public func receive<S>(subscriber: S) where S: Subscriber, Failure == S.Failure, Output == S.Input {
@@ -36,6 +43,10 @@ public struct BonjourServiceType: Publisher {
 public class BonjourService {
     public var name: String {
         service.name
+    }
+
+    public var txtRecordData: Data? {
+        service.txtRecordData()
     }
 
     private let service: NetService
