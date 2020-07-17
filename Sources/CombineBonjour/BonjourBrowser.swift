@@ -114,24 +114,31 @@ extension BonjourBrowser {
         }
 
         func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
-            // This will either buffer or flush the items right away.
-            // If subscriber asked for 10 but we had only 3 in the buffer, it will return 7 representing the remaining demand
-            // We actually don't care about that number, as once we buffer more items they will be flushed right away, so simply ignore it
-            _ = buffer?.buffer(value: .init(sender: browser, type: .foundService(serviceTypeFactory(service))))
+            _ = buffer?.buffer(value: .init(sender: browser, type: .didFind(service: serviceTypeFactory(service), moreComing: moreComing)))
         }
 
         func netServiceBrowser(_ browser: NetServiceBrowser, didRemove service: NetService, moreComing: Bool) {
-            // This will either buffer or flush the items right away.
-            // If subscriber asked for 10 but we had only 3 in the buffer, it will return 7 representing the remaining demand
-            // We actually don't care about that number, as once we buffer more items they will be flushed right away, so simply ignore it
-            _ = buffer?.buffer(value: .init(sender: browser, type: .removeService(serviceTypeFactory(service))))
+            _ = buffer?.buffer(value: .init(sender: browser, type: .didRemove(service: serviceTypeFactory(service), moreComing: moreComing)))
         }
 
         func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
-            buffer?.complete(completion: .failure(.didNotSearch(errorDict)))
+            buffer?.complete(completion: .failure(.didNotSearch(errorDict: errorDict)))
+        }
+
+        func netServiceBrowser(_ browser: NetServiceBrowser, didFindDomain domainString: String, moreComing: Bool) {
+            _ = buffer?.buffer(value: .init(sender: browser, type: .didFindDomain(domainString: domainString, moreComing: moreComing)))
+        }
+
+        func netServiceBrowserWillSearch(_ browser: NetServiceBrowser) {
+            _ = buffer?.buffer(value: .init(sender: browser, type: .willSearch))
+        }
+
+        func netServiceBrowser(_ browser: NetServiceBrowser, didRemoveDomain domainString: String, moreComing: Bool) {
+            _ = buffer?.buffer(value: .init(sender: browser, type: .didRemoveDomain(domainString: domainString, moreComing: moreComing)))
         }
 
         func netServiceBrowserDidStopSearch(_ browser: NetServiceBrowser) {
+            /// Sent to the NSNetServiceBrowser instance's delegate when the instance's previous running search request has stopped.
             buffer?.complete(completion: .finished)
         }
 
@@ -164,11 +171,34 @@ extension BonjourBrowser {
     }
 
     public enum EventType {
-        case foundService(BonjourServiceType)
-        case removeService(BonjourServiceType)
+        /// Sent to the NSNetServiceBrowser instance's delegate before the instance begins a search.
+        /// The delegate will not receive this message if the instance is unable to begin a search.
+        /// Instead, the delegate will receive the -netServiceBrowser:didNotSearch: message.
+        case willSearch
+
+        /// Sent to the NSNetServiceBrowser instance's delegate for each domain discovered.
+        /// If there are more domains, moreComing will be YES. If for some reason handling discovered domains requires significant processing,
+        /// accumulating domains until moreComing is NO and then doing the processing in bulk fashion may be desirable.
+        case didFindDomain(domainString: String, moreComing: Bool)
+
+        /// Sent to the NSNetServiceBrowser instance's delegate for each service discovered.
+        /// If there are more services, moreComing will be YES.
+        /// If for some reason handling discovered services requires significant processing, accumulating services until moreComing is NO
+        /// and then doing the processing in bulk fashion may be desirable.
+        case didFind(service: BonjourServiceType, moreComing: Bool)
+
+        /// Sent to the NSNetServiceBrowser instance's delegate when a previously discovered domain is no longer available.
+        case didRemoveDomain(domainString: String, moreComing: Bool)
+
+        /// Sent to the NSNetServiceBrowser instance's delegate when a previously discovered service is no longer published.
+        case didRemove(service: BonjourServiceType, moreComing: Bool)
     }
 
     public enum BonjourBrowserError: Error {
-        case didNotSearch([String: NSNumber])
+        /// Sent to the NSNetServiceBrowser instance's delegate when an error in searching for domains or services has occurred.
+        /// The error dictionary will contain two key/value pairs representing the error domain and code
+        /// (see the NSNetServicesError enumeration above for error code constants).
+        /// It is possible for an error to occur after a search has been started successfully.
+        case didNotSearch(errorDict: [String : NSNumber])
     }
 }

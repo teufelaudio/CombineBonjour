@@ -116,19 +116,29 @@ extension BonjourService {
             stop()
         }
 
-        func netService(_ sender: NetService, didUpdateTXTRecord data: Data) {
-            // This will either buffer or flush the items right away.
-            // If subscriber asked for 10 but we had only 3 in the buffer, it will return 7 representing the remaining demand
-            // We actually don't care about that number, as once we buffer more items they will be flushed right away, so simply ignore it
-            _ = buffer?.buffer(value: .init(sender: sender, type: .txtRecords(NetService.dictionary(fromTXTRecord: data))))
+        func netServiceWillPublish(_ sender: NetService) {
+            _ = buffer?.buffer(value: .init(sender: sender, type: .willPublish))
+        }
+
+        func netServiceDidPublish(_ sender: NetService) {
+            _ = buffer?.buffer(value: .init(sender: sender, type: .didPublish))
+        }
+
+        func netServiceWillResolve(_ sender: NetService) {
+            _ = buffer?.buffer(value: .init(sender: sender, type: .willResolve))
         }
 
         func netServiceDidResolveAddress(_ sender: NetService) {
-            guard let addresses = sender.addresses else { return }
-            // This will either buffer or flush the items right away.
-            // If subscriber asked for 10 but we had only 3 in the buffer, it will return 7 representing the remaining demand
-            // We actually don't care about that number, as once we buffer more items they will be flushed right away, so simply ignore it
-            _ = buffer?.buffer(value: .init(sender: sender, type: .resolvedAddresses(addresses)))
+            let addresses = sender.addresses ?? []
+            _ = buffer?.buffer(value: .init(sender: sender, type: .didResolveAddress(addresses)))
+        }
+
+        func netService(_ sender: NetService, didUpdateTXTRecord data: Data) {
+            _ = buffer?.buffer(value: .init(sender: sender, type: .didUpdateTXTRecord(txtRecord: NetService.dictionary(fromTXTRecord: data))))
+        }
+
+        func netService(_ sender: NetService, didAcceptConnectionWith inputStream: InputStream, outputStream: OutputStream) {
+            _ = buffer?.buffer(value: .init(sender: sender, type: .didAcceptConnectionWith(inputStream: inputStream, outputStream: outputStream)))
         }
 
         func netServiceDidStop(_ sender: NetService) {
@@ -136,11 +146,11 @@ extension BonjourService {
         }
 
         func netService(_ sender: NetService, didNotPublish errorDict: [String: NSNumber]) {
-            buffer?.complete(completion: .failure(.didNotPublish(errorDict)))
+            buffer?.complete(completion: .failure(.didNotPublish(errorDict: errorDict)))
         }
 
         func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {
-            buffer?.complete(completion: .failure(.didNotResolve(errorDict)))
+            buffer?.complete(completion: .failure(.didNotResolve(errorDict: errorDict)))
         }
 
         private func start() {
@@ -172,12 +182,50 @@ extension BonjourService {
     }
 
     public enum EventType {
-        case txtRecords([String: Data])
-        case resolvedAddresses([Data])
+        /// Sent to the NSNetService instance's delegate prior to advertising the service on the network.
+        /// If for some reason the service cannot be published, the delegate will not receive this message, and an error will be delivered to the
+        /// delegate via the delegate's -netService:didNotPublish: method.
+        case willPublish
+
+        /// Sent to the NSNetService instance's delegate when the publication of the instance is complete and successful.
+        case didPublish
+
+        /// Sent to the NSNetService instance's delegate prior to resolving a service on the network. If for some reason the resolution cannot occur,
+        /// the delegate will not receive this message, and an error will be delivered to the delegate via the delegate's
+        /// -netService:didNotResolve: method.
+        case willResolve
+
+        /// Sent to the NSNetService instance's delegate when one or more addresses have been resolved for an NSNetService instance.
+        /// Some NSNetService methods will return different results before and after a successful resolution.
+        /// An NSNetService instance may get resolved more than once; truly robust clients may wish to resolve again after an error,
+        /// or to resolve more than once.
+        case didResolveAddress([Data])
+
+        /// Sent to the NSNetService instance's delegate when the instance is being monitored and the instance's TXT record has been updated.
+        /// The new record is contained in the data parameter.
+        case didUpdateTXTRecord(txtRecord: [String: Data])
+
+        /// Sent to a published NSNetService instance's delegate when a new connection is
+        /// received. Before you can communicate with the connecting client, you must -open
+        /// and schedule the streams. To reject a connection, just -open both streams and
+        /// then immediately -close them.
+
+        /// To enable TLS on the stream, set the various TLS settings using
+        /// kCFStreamPropertySSLSettings before calling -open. You must also specify
+        /// kCFBooleanTrue for kCFStreamSSLIsServer in the settings dictionary along with
+        /// a valid SecIdentityRef as the first entry of kCFStreamSSLCertificates.
+        case didAcceptConnectionWith(inputStream: InputStream, outputStream: OutputStream)
     }
 
     public enum BonjourServiceError: Error {
-        case didNotPublish([String: NSNumber])
-        case didNotResolve([String: NSNumber])
+        /// Sent to the NSNetService instance's delegate when an error in publishing the instance occurs.
+        /// The error dictionary will contain two key/value pairs representing the error domain and code (see the NSNetServicesError enumeration
+        /// above for error code constants). It is possible for an error to occur after a successful publication.
+        case didNotPublish(errorDict: [String : NSNumber])
+
+        /// Sent to the NSNetService instance's delegate when an error in resolving the instance occurs.
+        /// The error dictionary will contain two key/value pairs representing the error domain and code
+        /// (see the NSNetServicesError enumeration above for error code constants).
+        case didNotResolve(errorDict: [String : NSNumber])
     }
 }
