@@ -114,27 +114,27 @@ extension BonjourBrowser {
         }
 
         func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
-            _ = buffer?.buffer(value: .init(sender: browser, type: .didFind(service: serviceTypeFactory(service), moreComing: moreComing)))
+            _ = buffer?.buffer(value: .init(netServiceBrowser: browser, type: .didFind(service: serviceTypeFactory(service), moreComing: moreComing)))
         }
 
         func netServiceBrowser(_ browser: NetServiceBrowser, didRemove service: NetService, moreComing: Bool) {
-            _ = buffer?.buffer(value: .init(sender: browser, type: .didRemove(service: serviceTypeFactory(service), moreComing: moreComing)))
+            _ = buffer?.buffer(value: .init(netServiceBrowser: browser, type: .didRemove(service: serviceTypeFactory(service), moreComing: moreComing)))
         }
 
         func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
-            buffer?.complete(completion: .failure(.didNotSearch(errorDict: errorDict)))
+            buffer?.complete(completion: .failure(.didNotSearch(netServiceBrowser: browser, errorDict: errorDict)))
         }
 
         func netServiceBrowser(_ browser: NetServiceBrowser, didFindDomain domainString: String, moreComing: Bool) {
-            _ = buffer?.buffer(value: .init(sender: browser, type: .didFindDomain(domainString: domainString, moreComing: moreComing)))
+            _ = buffer?.buffer(value: .init(netServiceBrowser: browser, type: .didFindDomain(domainString: domainString, moreComing: moreComing)))
         }
 
         func netServiceBrowserWillSearch(_ browser: NetServiceBrowser) {
-            _ = buffer?.buffer(value: .init(sender: browser, type: .willSearch))
+            _ = buffer?.buffer(value: .init(netServiceBrowser: browser, type: .willSearch))
         }
 
         func netServiceBrowser(_ browser: NetServiceBrowser, didRemoveDomain domainString: String, moreComing: Bool) {
-            _ = buffer?.buffer(value: .init(sender: browser, type: .didRemoveDomain(domainString: domainString, moreComing: moreComing)))
+            _ = buffer?.buffer(value: .init(netServiceBrowser: browser, type: .didRemoveDomain(domainString: domainString, moreComing: moreComing)))
         }
 
         func netServiceBrowserDidStopSearch(_ browser: NetServiceBrowser) {
@@ -161,11 +161,11 @@ extension BonjourBrowser {
 // MARK: - Model
 extension BonjourBrowser {
     public struct Event {
-        public let sender: NetServiceBrowser
+        public let netServiceBrowser: NetServiceBrowser
         public let type: EventType
 
-        public init(sender: NetServiceBrowser, type: EventType) {
-            self.sender = sender
+        public init(netServiceBrowser: NetServiceBrowser, type: EventType) {
+            self.netServiceBrowser = netServiceBrowser
             self.type = type
         }
     }
@@ -199,6 +199,6 @@ extension BonjourBrowser {
         /// The error dictionary will contain two key/value pairs representing the error domain and code
         /// (see the NSNetServicesError enumeration above for error code constants).
         /// It is possible for an error to occur after a search has been started successfully.
-        case didNotSearch(errorDict: [String : NSNumber])
+        case didNotSearch(netServiceBrowser: NetServiceBrowser, errorDict: [String : NSNumber])
     }
 }

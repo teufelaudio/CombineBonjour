@@ -117,28 +117,28 @@ extension BonjourService {
         }
 
         func netServiceWillPublish(_ sender: NetService) {
-            _ = buffer?.buffer(value: .init(sender: sender, type: .willPublish))
+            _ = buffer?.buffer(value: .init(netService: sender, type: .willPublish))
         }
 
         func netServiceDidPublish(_ sender: NetService) {
-            _ = buffer?.buffer(value: .init(sender: sender, type: .didPublish))
+            _ = buffer?.buffer(value: .init(netService: sender, type: .didPublish))
         }
 
         func netServiceWillResolve(_ sender: NetService) {
-            _ = buffer?.buffer(value: .init(sender: sender, type: .willResolve))
+            _ = buffer?.buffer(value: .init(netService: sender, type: .willResolve))
         }
 
         func netServiceDidResolveAddress(_ sender: NetService) {
             let addresses = sender.addresses ?? []
-            _ = buffer?.buffer(value: .init(sender: sender, type: .didResolveAddress(addresses)))
+            _ = buffer?.buffer(value: .init(netService: sender, type: .didResolveAddress(addresses)))
         }
 
         func netService(_ sender: NetService, didUpdateTXTRecord data: Data) {
-            _ = buffer?.buffer(value: .init(sender: sender, type: .didUpdateTXTRecord(txtRecord: NetService.dictionary(fromTXTRecord: data))))
+            _ = buffer?.buffer(value: .init(netService: sender, type: .didUpdateTXTRecord(txtRecord: NetService.dictionary(fromTXTRecord: data))))
         }
 
         func netService(_ sender: NetService, didAcceptConnectionWith inputStream: InputStream, outputStream: OutputStream) {
-            _ = buffer?.buffer(value: .init(sender: sender, type: .didAcceptConnectionWith(inputStream: inputStream, outputStream: outputStream)))
+            _ = buffer?.buffer(value: .init(netService: sender, type: .didAcceptConnectionWith(inputStream: inputStream, outputStream: outputStream)))
         }
 
         func netServiceDidStop(_ sender: NetService) {
@@ -146,11 +146,11 @@ extension BonjourService {
         }
 
         func netService(_ sender: NetService, didNotPublish errorDict: [String: NSNumber]) {
-            buffer?.complete(completion: .failure(.didNotPublish(errorDict: errorDict)))
+            buffer?.complete(completion: .failure(.didNotPublish(netService: sender, errorDict: errorDict)))
         }
 
         func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {
-            buffer?.complete(completion: .failure(.didNotResolve(errorDict: errorDict)))
+            buffer?.complete(completion: .failure(.didNotResolve(netService: sender, errorDict: errorDict)))
         }
 
         private func start() {
@@ -172,11 +172,11 @@ extension BonjourService {
 // MARK: - Model
 extension BonjourService {
     public struct Event {
-        public let sender: NetService
+        public let netService: NetService
         public let type: EventType
 
-        public init(sender: NetService, type: EventType) {
-            self.sender = sender
+        public init(netService: NetService, type: EventType) {
+            self.netService = netService
             self.type = type
         }
     }
@@ -221,11 +221,11 @@ extension BonjourService {
         /// Sent to the NSNetService instance's delegate when an error in publishing the instance occurs.
         /// The error dictionary will contain two key/value pairs representing the error domain and code (see the NSNetServicesError enumeration
         /// above for error code constants). It is possible for an error to occur after a successful publication.
-        case didNotPublish(errorDict: [String : NSNumber])
+        case didNotPublish(netService: NetService, errorDict: [String : NSNumber])
 
         /// Sent to the NSNetService instance's delegate when an error in resolving the instance occurs.
         /// The error dictionary will contain two key/value pairs representing the error domain and code
         /// (see the NSNetServicesError enumeration above for error code constants).
-        case didNotResolve(errorDict: [String : NSNumber])
+        case didNotResolve(netService: NetService, errorDict: [String : NSNumber])
     }
 }
