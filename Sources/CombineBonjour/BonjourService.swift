@@ -155,6 +155,7 @@ extension BonjourService {
 
         private func start() {
             service.startMonitoring()
+            service.resolve(withTimeout: 5.0)
         }
 
         private func stop() {
