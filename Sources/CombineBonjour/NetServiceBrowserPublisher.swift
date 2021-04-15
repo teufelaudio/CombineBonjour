@@ -1,5 +1,5 @@
 //
-//  BonjourBrowser.swift
+//  NetServiceBrowserPublisher.swift
 //  FoundationExtensions
 //
 //  Created by Luiz Barbosa on 06.03.20.
@@ -9,64 +9,46 @@
 import Combine
 import Foundation
 
-public struct BonjourBrowserType: Publisher {
-    public typealias Output = BonjourBrowser.Event
-    public typealias Failure = BonjourBrowser.BonjourBrowserError
-
-    private let onReceive: (AnySubscriber<Output, Failure>) -> Void
-
-    public init<P: Publisher>(publisher: P) where P.Output == Output, P.Failure == Failure {
-        onReceive = publisher.receive(subscriber:)
-    }
-
-    public init(bonjourBrowser: BonjourBrowser) {
-        self.init(publisher: bonjourBrowser)
-    }
-
-    public func receive<S>(subscriber: S) where S: Subscriber, Failure == S.Failure, Output == S.Input {
-        onReceive(AnySubscriber(subscriber))
+extension NetServiceBrowser {
+    public func publisher(serviceOfType services: String, inDomain domain: String) -> NetServiceBrowserPublisher {
+        .init(netServiceBrowser: self, serviceOfType: services, inDomain: domain)
     }
 }
 
-public class BonjourBrowser {
+public struct NetServiceBrowserPublisher {
+    private let netServiceBrowser: NetServiceBrowser
+    private let services: String
     private let domain: String
-    private let serviceType: String
-    private let serviceTypeFactory: (NetService) -> BonjourServiceType
 
-    public init(
-        serviceType: String,
-        domain: String,
-        serviceTypeFactory: @escaping (NetService) -> BonjourServiceType = { BonjourService(service: $0).erase() }
-    ) {
+    public init(netServiceBrowser: NetServiceBrowser, serviceOfType services: String, inDomain domain: String) {
+        self.netServiceBrowser = netServiceBrowser
+        self.services = services
         self.domain = domain
-        self.serviceType = serviceType
-        self.serviceTypeFactory = serviceTypeFactory
     }
 }
 
-extension BonjourBrowser: Publisher {
+extension NetServiceBrowserPublisher: Publisher {
     public typealias Output = Event
-    public typealias Failure = BonjourBrowserError
+    public typealias Failure = NetServiceBrowserError
 
     public func receive<S>(subscriber: S) where S: Subscriber, Failure == S.Failure, Output == S.Input {
         let subscription = Subscription(
             subscriber: subscriber,
-            serviceType: serviceType,
-            domain: domain,
-            serviceTypeFactory: { BonjourServiceType.init(bonjourService: .init(service: $0)) }
+            netServiceBrowser: netServiceBrowser,
+            services: services,
+            domain: domain
         )
         subscriber.receive(subscription: subscription)
     }
 }
 
-extension BonjourBrowser {
+extension NetServiceBrowserPublisher {
     private class Subscription<SubscriberType: Subscriber>: NSObject, Combine.Subscription, NetServiceBrowserDelegate
     where SubscriberType.Input == Output, SubscriberType.Failure == Failure {
         private var buffer: DemandBuffer<SubscriberType>?
-        private let browser: NetServiceBrowser
+        private let netServiceBrowser: NetServiceBrowser
+        private let services: String
         private let domain: String
-        private let serviceTypeFactory: (NetService) -> BonjourServiceType
-        private let serviceType: String
 
         // We need a lock to update the state machine of this Subscription
         private let lock = NSRecursiveLock()
@@ -75,15 +57,14 @@ extension BonjourBrowser {
         // Only demand starts the side-effect, so we have to be very lazy and postpone the side-effects as much as possible
         private var started: Bool = false
 
-        init(subscriber: SubscriberType, serviceType: String, domain: String, serviceTypeFactory: @escaping (NetService) -> BonjourServiceType) {
-            self.browser = NetServiceBrowser()
+        init(subscriber: SubscriberType, netServiceBrowser: NetServiceBrowser, services: String, domain: String) {
+            self.netServiceBrowser = netServiceBrowser
             self.buffer = DemandBuffer(subscriber: subscriber)
+            self.services = services
             self.domain = domain
-            self.serviceType = serviceType
-            self.serviceTypeFactory = serviceTypeFactory
             super.init()
 
-            browser.delegate = self
+            netServiceBrowser.delegate = self
         }
 
         public func request(_ demand: Subscribers.Demand) {
@@ -114,11 +95,11 @@ extension BonjourBrowser {
         }
 
         func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
-            _ = buffer?.buffer(value: .init(netServiceBrowser: browser, type: .didFind(service: serviceTypeFactory(service), moreComing: moreComing)))
+            _ = buffer?.buffer(value: .init(netServiceBrowser: browser, type: .didFind(service: service, moreComing: moreComing)))
         }
 
         func netServiceBrowser(_ browser: NetServiceBrowser, didRemove service: NetService, moreComing: Bool) {
-            _ = buffer?.buffer(value: .init(netServiceBrowser: browser, type: .didRemove(service: serviceTypeFactory(service), moreComing: moreComing)))
+            _ = buffer?.buffer(value: .init(netServiceBrowser: browser, type: .didRemove(service: service, moreComing: moreComing)))
         }
 
         func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
@@ -143,23 +124,17 @@ extension BonjourBrowser {
         }
 
         private func start() {
-            browser.searchForServices(ofType: serviceType, inDomain: domain)
+            netServiceBrowser.searchForServices(ofType: services, inDomain: domain)
         }
 
         private func stop() {
-            browser.stop()
+            netServiceBrowser.stop()
         }
-    }
-}
-
-extension BonjourBrowser {
-    public func erase() -> BonjourBrowserType {
-        .init(bonjourBrowser: self)
     }
 }
 
 // MARK: - Model
-extension BonjourBrowser {
+extension NetServiceBrowserPublisher {
     public struct Event {
         public let netServiceBrowser: NetServiceBrowser
         public let type: EventType
@@ -185,16 +160,16 @@ extension BonjourBrowser {
         /// If there are more services, moreComing will be YES.
         /// If for some reason handling discovered services requires significant processing, accumulating services until moreComing is NO
         /// and then doing the processing in bulk fashion may be desirable.
-        case didFind(service: BonjourServiceType, moreComing: Bool)
+        case didFind(service: NetService, moreComing: Bool)
 
         /// Sent to the NSNetServiceBrowser instance's delegate when a previously discovered domain is no longer available.
         case didRemoveDomain(domainString: String, moreComing: Bool)
 
         /// Sent to the NSNetServiceBrowser instance's delegate when a previously discovered service is no longer published.
-        case didRemove(service: BonjourServiceType, moreComing: Bool)
+        case didRemove(service: NetService, moreComing: Bool)
     }
 
-    public enum BonjourBrowserError: Error {
+    public enum NetServiceBrowserError: Error {
         /// Sent to the NSNetServiceBrowser instance's delegate when an error in searching for domains or services has occurred.
         /// The error dictionary will contain two key/value pairs representing the error domain and code
         /// (see the NSNetServicesError enumeration above for error code constants).
