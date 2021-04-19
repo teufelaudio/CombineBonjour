@@ -1,5 +1,5 @@
 //
-//  BonjourService.swift
+//  NetServicePublisher.swift
 //  FoundationExtensions
 //
 //  Created by Luiz Barbosa on 06.03.20.
@@ -9,70 +9,47 @@
 import Combine
 import Foundation
 
-public struct BonjourServiceType: Publisher {
-    public typealias Output = BonjourService.Event
-    public typealias Failure = BonjourService.BonjourServiceError
-
-    private let onReceive: (AnySubscriber<Output, Failure>) -> Void
-    private let getName: () -> String
-    private let getTxtRecordData: () -> [String: Data]?
-    public var name: String {
-        getName()
-    }
-
-    public var txtRecordData: [String: Data]? {
-        getTxtRecordData()
-    }
-
-    public init<P: Publisher>(publisher: P, getName: @escaping () -> String, getTxtRecordData: @escaping () -> [String: Data]?)
-    where P.Output == Output, P.Failure == Failure {
-        onReceive = publisher.receive(subscriber:)
-        self.getName = getName
-        self.getTxtRecordData = getTxtRecordData
-    }
-
-    public init(bonjourService: BonjourService) {
-        self.init(publisher: bonjourService, getName: { bonjourService.name }, getTxtRecordData: { bonjourService.txtRecordData })
-    }
-
-    public func receive<S>(subscriber: S) where S: Subscriber, Failure == S.Failure, Output == S.Input {
-        onReceive(AnySubscriber(subscriber))
+extension NetService {
+    public func publisher(timeout: TimeInterval = 5.0) -> NetServicePublisher {
+        .init(netService: self, timeout: timeout)
     }
 }
 
-public class BonjourService {
-    public var name: String {
-        service.name
+public struct NetServicePublisher {
+    private let netService: NetService
+    private let timeout: TimeInterval
+
+    public init(netService: NetService, timeout: TimeInterval) {
+        self.netService = netService
+        self.timeout = timeout
     }
 
-    public var txtRecordData: [String: Data]? {
-        service.txtRecordData().map(
-            NetService.dictionary(fromTXTRecord:)
-        )
-    }
-
-    private let service: NetService
-
-    public init(service: NetService) {
-        self.service = service
+    public init(name: String, domain: String, type: String, timeout: TimeInterval) {
+        self.netService = .init(domain: domain, type: type, name: name)
+        self.timeout = timeout
     }
 }
 
-extension BonjourService: Publisher {
+extension NetServicePublisher: Publisher {
     public typealias Output = Event
-    public typealias Failure = BonjourServiceError
+    public typealias Failure = NetServiceError
 
     public func receive<S>(subscriber: S) where S: Subscriber, Failure == S.Failure, Output == S.Input {
-        let subscription = Subscription(subscriber: subscriber, service: service)
+        let subscription = Subscription(
+            subscriber: subscriber,
+            netService: netService,
+            timeout: timeout
+        )
         subscriber.receive(subscription: subscription)
     }
 }
 
-extension BonjourService {
+extension NetServicePublisher {
     private class Subscription<SubscriberType: Subscriber>: NSObject, Combine.Subscription, NetServiceDelegate
     where SubscriberType.Input == Output, SubscriberType.Failure == Failure {
         private var buffer: DemandBuffer<SubscriberType>?
-        private let service: NetService
+        private let netService: NetService
+        private let timeout: TimeInterval
 
         // We need a lock to update the state machine of this Subscription
         private let lock = NSRecursiveLock()
@@ -81,12 +58,13 @@ extension BonjourService {
         // Only demand starts the side-effect, so we have to be very lazy and postpone the side-effects as much as possible
         private var started: Bool = false
 
-        init(subscriber: SubscriberType, service: NetService) {
-            self.service = service
+        init(subscriber: SubscriberType, netService: NetService, timeout: TimeInterval) {
+            self.netService = netService
             self.buffer = DemandBuffer(subscriber: subscriber)
+            self.timeout = timeout
             super.init()
 
-            service.delegate = self
+            netService.delegate = self
         }
 
         public func request(_ demand: Subscribers.Demand) {
@@ -111,8 +89,6 @@ extension BonjourService {
         }
 
         public func cancel() {
-            buffer = nil
-            started = false
             stop()
         }
 
@@ -150,29 +126,35 @@ extension BonjourService {
         }
 
         func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {
-            buffer?.complete(completion: .failure(.didNotResolve(netService: sender, errorDict: errorDict)))
+            guard let errorDomain = errorDict["NSNetServicesErrorDomain"]?.intValue,
+                  let errorCode = errorDict["NSNetServicesErrorCode"]?.intValue else { return }
+
+            if errorCode == NetService.ErrorCode.timeoutError.rawValue {
+                buffer?.complete(completion: .failure(.netServiceTimeout))
+                return
+            }
+
+            buffer?.complete(completion: .failure(.didNotResolve(netService: sender, errorDict: errorDict, errorDomain: errorDomain, errorCode: errorCode)))
         }
 
         private func start() {
-            service.startMonitoring()
-            service.resolve(withTimeout: 5.0)
+            netService.startMonitoring()
+            netService.resolve(withTimeout: timeout)
         }
 
         private func stop() {
-            service.stopMonitoring()
+            netService.stopMonitoring()
+            lock.lock()
+            buffer = nil
+            started = false
+            lock.unlock()
         }
-    }
-}
-
-extension BonjourService {
-    public func erase() -> BonjourServiceType {
-        .init(bonjourService: self)
     }
 }
 
 // MARK: - Model
-extension BonjourService {
-    public struct Event {
+extension NetServicePublisher {
+    public struct Event: Equatable {
         public let netService: NetService
         public let type: EventType
 
@@ -182,7 +164,7 @@ extension BonjourService {
         }
     }
 
-    public enum EventType {
+    public enum EventType: Equatable {
         /// Sent to the NSNetService instance's delegate prior to advertising the service on the network.
         /// If for some reason the service cannot be published, the delegate will not receive this message, and an error will be delivered to the
         /// delegate via the delegate's -netService:didNotPublish: method.
@@ -218,7 +200,7 @@ extension BonjourService {
         case didAcceptConnectionWith(inputStream: InputStream, outputStream: OutputStream)
     }
 
-    public enum BonjourServiceError: Error {
+    public enum NetServiceError: Error {
         /// Sent to the NSNetService instance's delegate when an error in publishing the instance occurs.
         /// The error dictionary will contain two key/value pairs representing the error domain and code (see the NSNetServicesError enumeration
         /// above for error code constants). It is possible for an error to occur after a successful publication.
@@ -227,6 +209,9 @@ extension BonjourService {
         /// Sent to the NSNetService instance's delegate when an error in resolving the instance occurs.
         /// The error dictionary will contain two key/value pairs representing the error domain and code
         /// (see the NSNetServicesError enumeration above for error code constants).
-        case didNotResolve(netService: NetService, errorDict: [String : NSNumber])
+        case didNotResolve(netService: NetService, errorDict: [String : NSNumber], errorDomain: Int, errorCode: Int)
+
+        /// The NetService search didn't resolve in the provided time
+        case netServiceTimeout
     }
 }
