@@ -37,6 +37,19 @@ public struct NWBrowserPublisher {
             using: params
         )
     }
+
+    public init(
+        serviceDescription: ServiceDescription,
+        params: NWParameters = .tcp
+    ) {
+        self.browser = NWBrowser(
+            for: NWBrowser.Descriptor.bonjourWithTXTRecord(
+                type: serviceDescription.serviceName,
+                domain: serviceDescription.domain
+            ),
+            using: params
+        )
+    }
 }
 
 extension NWBrowserPublisher: Publisher {
