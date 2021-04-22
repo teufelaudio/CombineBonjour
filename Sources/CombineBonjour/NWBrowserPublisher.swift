@@ -88,13 +88,13 @@ extension NWBrowserPublisher {
             })
             browser.browseResultsChangedHandler = .some({ [weak self] (_ , changes: Set<NWBrowser.Result.Change>) in
                 changes.forEach { change in
-                    guard let strongSelf = self, let buffer = strongSelf.buffer else { return }
+                    guard let strongSelf = self else { return }
 
                     switch change {
                     case .identical:
                         break
                     case let .added(result):
-                        strongSelf.serviceAdded(buffer: buffer, result: result)
+                        strongSelf.serviceAdded(result: result)
                     case let .removed(result):
                         strongSelf.serviceRemoved(result: result)
                     case .changed(old: let old, new: let new, flags: let flags):
@@ -143,18 +143,17 @@ extension NWBrowserPublisher {
 
         // MARK: - NWBrowser helpers
 
-        private func serviceAdded(buffer: DemandBuffer<SubscriberType>,
-                                  result: NWBrowser.Result) {
+        private func serviceAdded(result: NWBrowser.Result) {
             // we now can emit that we've found a service, but we may need to resolve it
-            _ = buffer.buffer(value: .didFind(endpoint: result.endpoint, txt: result.metadata.txt))
+            _ = buffer?.buffer(value: .didFind(endpoint: result.endpoint, txt: result.metadata.txt))
         }
 
         private func serviceRemoved(result: NWBrowser.Result) {
-            _ = buffer?.buffer(value: .didRemove(endpoint: result.endpoint))
+            _ = buffer?.buffer(value: .didRemove(endpoint: result.endpoint, txt: result.metadata.txt))
         }
 
         private func serviceChanged(from old: NWBrowser.Result, to new: NWBrowser.Result, with flags: NWBrowser.Result.Change.Flags) {
-            _ = buffer?.buffer(value: .didUpdate(oldEndpoint: old.endpoint, newEndpoint: new.endpoint, txt: new.metadata.txt))
+            _ = buffer?.buffer(value: .didUpdate(oldEndpoint: old.endpoint, newEndpoint: new.endpoint, txt: new.metadata.txt, flags: flags))
         }
 
         private func handleError(error: NWError) {
@@ -174,10 +173,10 @@ extension NWBrowserPublisher {
         case didFind(endpoint: NWEndpoint, txt: [String: String]?)
 
         /// A previously discovered service is no longer published.
-        case didRemove(endpoint: NWEndpoint)
+        case didRemove(endpoint: NWEndpoint, txt: [String: String]?)
 
         /// A previously discovered service changed. Usually this means, it was discovered or removed on another network interface. See flags.
-        case didUpdate(oldEndpoint: NWEndpoint, newEndpoint: NWEndpoint, txt: [String: String]?)
+        case didUpdate(oldEndpoint: NWEndpoint, newEndpoint: NWEndpoint, txt: [String: String]?, flags: NWBrowser.Result.Change.Flags)
     }
 
     public enum NWBrowserError: Error {

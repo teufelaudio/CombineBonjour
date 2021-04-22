@@ -19,9 +19,13 @@ extension NWEndpoint {
 
 public struct NWEndpointPublisher {
     private let endpoint: NWEndpoint
+    private let publishResolvedAddresses: Bool
+    private let publishResolvedTXT: Bool
 
-    public init(endpoint: NWEndpoint) {
+    public init(endpoint: NWEndpoint, publishResolvedAddresses: Bool = true, publishResolvedTXT: Bool = false) {
         self.endpoint = endpoint
+        self.publishResolvedAddresses = publishResolvedAddresses
+        self.publishResolvedTXT = publishResolvedTXT
     }
 }
 
@@ -41,15 +45,17 @@ extension NWEndpointPublisher: Publisher {
         case let .service(name, type, domain, interface):
             // In this case we will use the NetServicePublisher
             NetService(domain: domain, type: type, name: name)
-                .publisher()
+                .publisher(monitorDevice: publishResolvedTXT)
                 .compactMap { event in
                     switch event.type {
                     case .willPublish, .willResolve, .didPublish, .didAcceptConnectionWith:
                         return nil
                     case .didResolveAddress:
+                        guard publishResolvedAddresses else { return nil }
                         let txt = event.netService.txtRecordData().map(NetService.dictionary(fromTXTRecord:))
                         return .service(event.netService, interface: interface, txt: txt)
                     case let .didUpdateTXTRecord(txtRecord):
+                        guard publishResolvedTXT else { return nil }
                         event.netService.setTXTRecord(NetService.data(fromTXTRecord: txtRecord))
                         return .service(event.netService, interface: interface, txt: txtRecord)
                     }
@@ -155,7 +161,12 @@ extension NWEndpointPublisher.ResolvedEndpoint {
         case let .hostPort(.name(hostname), _, _, _): return hostname
         case let .service(service, _, _): return service.hostName
         case let .url(url, _): return url.host
-        case .hostPort(.ip, _, _, _), .unix: return nil
+        case let .hostPort(hostType, _, _, _):
+            switch hostType {
+            case let .name(host): return host
+            case let .ip(addr): return addr.ipUrlString
+            }
+        case .unix: return nil
         }
     }
 
