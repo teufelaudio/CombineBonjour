@@ -1,10 +1,4 @@
-//
-//  NetServicePublisher.swift
-//  FoundationExtensions
-//
-//  Created by Luiz Barbosa on 06.03.20.
-//  Copyright © 2020 Lautsprecher Teufel GmbH. All rights reserved.
-//
+// Copyright © 2021 Lautsprecher Teufel GmbH. All rights reserved.
 
 import Combine
 import Foundation
