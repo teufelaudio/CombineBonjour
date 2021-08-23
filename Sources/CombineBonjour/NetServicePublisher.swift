@@ -10,7 +10,7 @@ import Combine
 import Foundation
 
 extension NetService {
-    public func publisher(monitorDevice: Bool, timeout: TimeInterval = 5.0) -> NetServicePublisher {
+    public func publisher(monitorDevice: NetServiceTXTRecordsMonitorStrategy, timeout: TimeInterval = 5.0) -> NetServicePublisher {
         .init(netService: self, timeout: timeout, monitorDevice: monitorDevice)
     }
 }
@@ -18,15 +18,15 @@ extension NetService {
 public struct NetServicePublisher {
     private let netService: NetService
     private let timeout: TimeInterval
-    private let monitorDevice: Bool
+    private let monitorDevice: NetServiceTXTRecordsMonitorStrategy
 
-    public init(netService: NetService, timeout: TimeInterval, monitorDevice: Bool) {
+    public init(netService: NetService, timeout: TimeInterval, monitorDevice: NetServiceTXTRecordsMonitorStrategy) {
         self.netService = netService
         self.timeout = timeout
         self.monitorDevice = monitorDevice
     }
 
-    public init(name: String, domain: String, type: String, timeout: TimeInterval, monitorDevice: Bool) {
+    public init(name: String, domain: String, type: String, timeout: TimeInterval, monitorDevice: NetServiceTXTRecordsMonitorStrategy) {
         self.netService = .init(domain: domain, type: type, name: name)
         self.timeout = timeout
         self.monitorDevice = monitorDevice
@@ -54,7 +54,7 @@ extension NetServicePublisher {
         private var buffer: DemandBuffer<SubscriberType>?
         private let netService: NetService
         private let timeout: TimeInterval
-        private let monitorDevice: Bool
+        private let monitorDevice: NetServiceTXTRecordsMonitorStrategy
 
         // We need a lock to update the state machine of this Subscription
         private let lock = NSRecursiveLock()
@@ -63,7 +63,7 @@ extension NetServicePublisher {
         // Only demand starts the side-effect, so we have to be very lazy and postpone the side-effects as much as possible
         private var started: Bool = false
 
-        init(subscriber: SubscriberType, netService: NetService, timeout: TimeInterval, monitorDevice: Bool) {
+        init(subscriber: SubscriberType, netService: NetService, timeout: TimeInterval, monitorDevice: NetServiceTXTRecordsMonitorStrategy) {
             self.netService = netService
             self.buffer = DemandBuffer(subscriber: subscriber)
             self.timeout = timeout
@@ -144,14 +144,14 @@ extension NetServicePublisher {
         }
 
         private func start() {
-            if monitorDevice {
+            if monitorDevice == .keepMonitoringTXTUpdates {
                 netService.startMonitoring()
             }
             netService.resolve(withTimeout: timeout)
         }
 
         private func stop() {
-            if monitorDevice {
+            if monitorDevice == .keepMonitoringTXTUpdates {
                 netService.stopMonitoring()
             }
             lock.lock()

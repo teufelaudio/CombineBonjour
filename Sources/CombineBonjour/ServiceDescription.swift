@@ -11,9 +11,16 @@ import Foundation
 public struct ServiceDescription {
     public let serviceName: String
     public let domain: String
+    public let type: String
 
-    public init(serviceName: String, domain: String) {
+    public init(serviceName: String, type: String, domain: String) {
         self.serviceName = serviceName
+        self.type = type
         self.domain = domain
     }
+}
+
+public enum NetServiceTXTRecordsMonitorStrategy: Equatable {
+    case keepMonitoringTXTUpdates
+    case doNotMonitorTXTUpdates
 }
