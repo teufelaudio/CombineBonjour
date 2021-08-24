@@ -1,10 +1,4 @@
-//
-//  NetService+Extensions.swift
-//  CombineBonjour
-//
-//  Created by Luiz Rodrigo Martins Barbosa on 15.04.21.
-//  Copyright © 2021 Lautsprecher Teufel GmbH. All rights reserved.
-//
+// Copyright © 2021 Lautsprecher Teufel GmbH. All rights reserved.
 
 import Foundation
 

@@ -1,10 +1,4 @@
-//
-//  NetworkServiceBrowser.swift
-//  CombineBonjour
-//
-//  Created by Thomas Mellenthin on 08.04.21.
-//  Copyright © 2020 Lautsprecher Teufel GmbH. All rights reserved.
-//
+// Copyright © 2021 Lautsprecher Teufel GmbH. All rights reserved.
 
 import Network
 import Combine

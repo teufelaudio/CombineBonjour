@@ -18,7 +18,6 @@ let package = Package(
     ],
     targets: [
         .target(name: "CombineBonjour", dependencies: ["NetworkExtensions"]),
-        .target(name: "CombineBonjourAllStatic", dependencies: [.product(name: "NetworkExtensionsAllStatic", package: "NetworkExtensions")]),
-        .testTarget(name: "CombineBonjourTests", dependencies: ["CombineBonjour", "NetworkExtensions"])
+        .target(name: "CombineBonjourAllStatic", dependencies: [.product(name: "NetworkExtensionsAllStatic", package: "NetworkExtensions")])
     ]
 )

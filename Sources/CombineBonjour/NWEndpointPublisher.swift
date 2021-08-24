@@ -1,10 +1,4 @@
-//
-//  NWEndpointPublisher.swift
-//  CombineBonjour
-//
-//  Created by Luiz Rodrigo Martins Barbosa on 15.04.21.
-//  Copyright © 2021 Lautsprecher Teufel GmbH. All rights reserved.
-//
+// Copyright © 2021 Lautsprecher Teufel GmbH. All rights reserved.
 
 import Combine
 import Foundation
@@ -12,8 +6,15 @@ import Network
 import NetworkExtensions
 
 extension NWEndpoint {
-    public var publisher: NWEndpointPublisher {
-        .init(endpoint: self)
+    public func publisher() -> NWEndpointPublisher {
+        publisher { description, monitorStrategy in
+            NetService(domain: description.domain, type: description.type, name: description.serviceName).publisher(monitorDevice: monitorStrategy)
+        }
+    }
+
+    public func publisher<P: Publisher>(netServicePublisher: @escaping (ServiceDescription, NetServiceTXTRecordsMonitorStrategy) -> P)
+    -> NWEndpointPublisher where P.Output == NetServicePublisher.Output, P.Failure == NetServicePublisher.Failure {
+        .init(endpoint: self, netServicePublisher: netServicePublisher)
     }
 }
 
@@ -21,9 +22,17 @@ public struct NWEndpointPublisher {
     private let endpoint: NWEndpoint
     private let publishResolvedAddresses: Bool
     private let publishResolvedTXT: Bool
+    private let netServicePublisherFactory: (ServiceDescription, NetServiceTXTRecordsMonitorStrategy)
+        -> AnyPublisher<NetServicePublisher.Output, NetServicePublisher.Failure>
 
-    public init(endpoint: NWEndpoint, publishResolvedAddresses: Bool = true, publishResolvedTXT: Bool = false) {
+    public init<P: Publisher>(
+        endpoint: NWEndpoint,
+        netServicePublisher: @escaping (ServiceDescription, NetServiceTXTRecordsMonitorStrategy) -> P,
+        publishResolvedAddresses: Bool = true,
+        publishResolvedTXT: Bool = false
+    ) where P.Output == NetServicePublisher.Output, P.Failure == NetServicePublisher.Failure {
         self.endpoint = endpoint
+        self.netServicePublisherFactory = { netServicePublisher($0, $1).eraseToAnyPublisher() }
         self.publishResolvedAddresses = publishResolvedAddresses
         self.publishResolvedTXT = publishResolvedTXT
     }
@@ -44,24 +53,26 @@ extension NWEndpointPublisher: Publisher {
 
         case let .service(name, type, domain, interface):
             // In this case we will use the NetServicePublisher
-            NetService(domain: domain, type: type, name: name)
-                .publisher(monitorDevice: publishResolvedTXT)
-                .compactMap { event in
-                    switch event.type {
-                    case .willPublish, .willResolve, .didPublish, .didAcceptConnectionWith:
-                        return nil
-                    case .didResolveAddress:
-                        guard publishResolvedAddresses else { return nil }
-                        let txt = event.netService.txtRecordData().map(NetService.dictionary(fromTXTRecord:))
-                        return .service(event.netService, interface: interface, txt: txt)
-                    case let .didUpdateTXTRecord(txtRecord):
-                        guard publishResolvedTXT else { return nil }
-                        event.netService.setTXTRecord(NetService.data(fromTXTRecord: txtRecord))
-                        return .service(event.netService, interface: interface, txt: txtRecord)
-                    }
+            netServicePublisherFactory(
+                ServiceDescription(serviceName: name, type: type, domain: domain),
+                publishResolvedTXT ? .keepMonitoringTXTUpdates : .doNotMonitorTXTUpdates
+            )
+            .compactMap { event in
+                switch event.type {
+                case .willPublish, .willResolve, .didPublish, .didAcceptConnectionWith:
+                    return nil
+                case .didResolveAddress:
+                    guard publishResolvedAddresses else { return nil }
+                    let txt = event.netService.txtRecordData().map(NetService.dictionary(fromTXTRecord:))
+                    return .service(event.netService, interface: interface, txt: txt)
+                case let .didUpdateTXTRecord(txtRecord):
+                    guard publishResolvedTXT else { return nil }
+                    event.netService.setTXTRecord(NetService.data(fromTXTRecord: txtRecord))
+                    return .service(event.netService, interface: interface, txt: txtRecord)
                 }
-                .mapError(Failure.netServiceError)
-                .subscribe(subscriber)
+            }
+            .mapError(Failure.netServiceError)
+            .subscribe(subscriber)
 
         @unknown default:
             Fail(error: .endpointIsNotSupported)

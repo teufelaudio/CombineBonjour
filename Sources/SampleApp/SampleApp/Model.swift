@@ -1,9 +1,4 @@
-//
-//  Model.swift
-//  SampleApp
-//
-//  Created by Luiz Rodrigo Martins Barbosa on 15.04.21.
-//
+// Copyright © 2021 Lautsprecher Teufel GmbH. All rights reserved.
 
 import Combine
 import CombineBonjour
@@ -157,7 +152,7 @@ class Store: ObservableObject {
             state.lastError = error?.localizedDescription ?? state.lastError
 
         case let .getInfoAboutService(endpoint):
-            serviceResolution = endpoint.publisher
+            serviceResolution = endpoint.publisher()
                 .receive(on: DispatchQueue.main)
                 .sink(
                     receiveCompletion: { [weak self] completion in self?.dispatch(.serviceResolutionFinished(completion.failure)) },
@@ -196,7 +191,7 @@ class Store: ObservableObject {
                     switch event {
                     case let .didFind(endpoint, txt):
                         self?.dispatch(.discovered(endpoint: endpoint, txt: txt))
-                    case let .didRemove(endpoint):
+                    case let .didRemove(endpoint, _):
                         self?.dispatch(.lost(endpoint: endpoint))
                     case .didUpdate:
                         break
