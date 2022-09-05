@@ -10,14 +10,13 @@ let package = Package(
     ],
     products: [
         .library(name: "CombineBonjour", targets: ["CombineBonjour"]),
-        .library(name: "CombineBonjourAllStatic", targets: ["CombineBonjourAllStatic"]),
         .library(name: "CombineBonjourDynamic", type: .dynamic, targets: ["CombineBonjour"])
     ],
     dependencies: [
-        .package(url: "https://github.com/teufelaudio/NetworkExtensions.git", .upToNextMajor(from: "0.1.9"))
+        .package(url: "https://github.com/teufelaudio/NetworkExtensions.git", .exact("0.1.13"))
     ],
     targets: [
         .target(name: "CombineBonjour", dependencies: ["NetworkExtensions"]),
-        .target(name: "CombineBonjourAllStatic", dependencies: [.product(name: "NetworkExtensionsAllStatic", package: "NetworkExtensions")])
+        .target(name: "CombineBonjourDynamic", dependencies: [.product(name: "NetworkExtensionsDynamic", package: "NetworkExtensions")])
     ]
 )

@@ -3,7 +3,11 @@
 import Combine
 import Foundation
 import Network
+#if canImport(NetworkExtensions)
 import NetworkExtensions
+#elseif canImport(NetworkExtensionsDynamic)
+import NetworkExtensionsDynamic
+#endif
 
 extension NWEndpoint {
     public func publisher() -> NWEndpointPublisher {
