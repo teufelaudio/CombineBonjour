@@ -3,7 +3,11 @@
 import Network
 import Combine
 import Foundation
+#if canImport(NetworkExtensions)
 import NetworkExtensions
+#elseif canImport(NetworkExtensionsDynamic)
+import NetworkExtensionsDynamic
+#endif
 
 extension NWBrowser {
     public var publisher: NWBrowserPublisher {
