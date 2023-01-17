@@ -13,7 +13,7 @@ let package = Package(
         .library(name: "CombineBonjourDynamic", type: .dynamic, targets: ["CombineBonjour"])
     ],
     dependencies: [
-        .package(url: "https://github.com/teufelaudio/NetworkExtensions.git", .exact("0.1.14"))
+        .package(url: "https://github.com/teufelaudio/NetworkExtensions.git", .exact("0.1.15"))
     ],
     targets: [
         .target(name: "CombineBonjour", dependencies: ["NetworkExtensions"]),
