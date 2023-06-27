@@ -1,4 +1,4 @@
-// Copyright © 2021 Lautsprecher Teufel GmbH. All rights reserved.
+// Copyright © 2023 Lautsprecher Teufel GmbH. All rights reserved.
 
 import Combine
 import CombineBonjour
@@ -6,7 +6,7 @@ import Foundation
 import Network
 import NetworkExtensions
 
-struct DiscoveredService: Equatable, Identifiable {
+struct DiscoveredService: Hashable, Identifiable {
     init(endpoint: NWEndpoint, txtString: [String: String]?, isVisible: Bool) {
         self.endpoint = endpoint
         self.txt = TXTEntry.entries(from: txtString)
@@ -24,7 +24,7 @@ struct DiscoveredService: Equatable, Identifiable {
     var txt: [TXTEntry]
     let isVisible: Bool
 
-    struct TXTEntry: Equatable, Identifiable {
+    struct TXTEntry: Hashable, Identifiable {
         var id: String { key }
         let key: String
         let value: String
@@ -52,6 +52,8 @@ struct DiscoveredService: Equatable, Identifiable {
             return path
         case let .url(url):
             return url.absoluteString
+        case .opaque(_):
+            return "Not implemented"
         @unknown default:
             return "Not implemented"
         }
@@ -68,14 +70,16 @@ struct State: Equatable {
     var isDiscovering: Bool
     var lastError: String?
     var serviceToSearch: String
-    var selectedService: ServiceDetails?
+    var selectedService: DiscoveredService?
+    var resolvedService: NWEndpointPublisher.ResolvedEndpoint?
 
     static let initial = State(
         discoveredServices: [],
         isDiscovering: false,
         lastError: nil,
         serviceToSearch: "_airplay._tcp",
-        selectedService: nil
+        selectedService: nil,
+        resolvedService: nil
     )
 }
 
@@ -88,6 +92,7 @@ enum Action {
     case lost(endpoint: NWEndpoint)
     case updated(endpoint: NWEndpoint, txt: [String: Data]?)
     case tapService(DiscoveredService)
+    case backFromDetails
     case serviceResolutionFinished(Error?)
     case getInfoAboutService(NWEndpoint)
     case gotInfoAboutService(NWEndpointPublisher.ResolvedEndpoint)
@@ -120,9 +125,12 @@ class Store: ObservableObject {
                 state.selectedService = nil
                 serviceResolution = nil
             } else {
-                state.selectedService = .init(id: service.id, extraDetails: nil)
+                state.selectedService = service
                 dispatch(.getInfoAboutService(service.endpoint))
             }
+
+        case .backFromDetails:
+            state.selectedService = nil
 
         case .discoveryStarted:
             state.isDiscovering = true
@@ -131,7 +139,11 @@ class Store: ObservableObject {
 
         case let .discoveryFinished(error):
             state.isDiscovering = false
-            state.lastError = error?.localizedDescription
+            if let brwoserError = error as? NWBrowserPublisher.NWBrowserError, brwoserError.isBonjourPermissionDenied {
+                state.lastError = "Permission to use local network has not been granted 😢"
+            } else {
+                state.lastError = error?.localizedDescription
+            }
 
         case let .discovered(endpoint, txt):
             state.discoveredServices += [.init(endpoint: endpoint, txtString: txt, isVisible: true)]
@@ -160,7 +172,7 @@ class Store: ObservableObject {
                 )
 
         case let .gotInfoAboutService(resolved):
-            state.selectedService?.extraDetails = resolved
+            state.resolvedService = resolved
             if let index = state.discoveredServices.firstIndex(where: { $0.id == state.selectedService?.id }) {
                 state.discoveredServices[index].txt = DiscoveredService.TXTEntry.entries(from: resolved.txt) 
             }
