@@ -1,4 +1,4 @@
-// Copyright © 2021 Lautsprecher Teufel GmbH. All rights reserved.
+// Copyright © 2023 Lautsprecher Teufel GmbH. All rights reserved.
 
 import Network
 import Combine
@@ -195,5 +195,10 @@ extension NWBrowserPublisher {
         case bonjourPermissionDenied
         /// Any other error that can happen during discovery
         case didNotSearch(error: NWError)
+
+        public var isBonjourPermissionDenied: Bool {
+            guard case .bonjourPermissionDenied = self else { return false }
+            return true
+        }
     }
 }

@@ -1,4 +1,4 @@
-// Copyright © 2021 Lautsprecher Teufel GmbH. All rights reserved.
+// Copyright © 2023 Lautsprecher Teufel GmbH. All rights reserved.
 
 import Combine
 import Foundation
@@ -78,6 +78,8 @@ extension NWEndpointPublisher: Publisher {
             .mapError(Failure.netServiceError)
             .subscribe(subscriber)
 
+        case .opaque(_):
+            break
         @unknown default:
             Fail(error: .endpointIsNotSupported)
                 .subscribe(subscriber)
@@ -149,6 +151,8 @@ extension NWEndpointPublisher.ResolvedEndpoint {
             return .unix(path: path, txt: txt)
         case let .url(url):
             return .url(url, txt: txt)
+        case .opaque(_):
+            fatalError("NWEndpoint case not implemented: \(endpoint)")
         @unknown default:
             fatalError("NWEndpoint case not implemented: \(endpoint)")
         }

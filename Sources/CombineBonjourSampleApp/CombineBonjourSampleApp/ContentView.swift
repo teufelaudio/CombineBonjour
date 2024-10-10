@@ -1,4 +1,4 @@
-// Copyright © 2021 Lautsprecher Teufel GmbH. All rights reserved.
+// Copyright © 2023 Lautsprecher Teufel GmbH. All rights reserved.
 
 import Combine
 import CombineBonjour
@@ -8,26 +8,20 @@ struct ContentView: View {
     @ObservedObject var viewModel: Store
 
     var body: some View {
-        HSplitView {
-            leftView
-
-            rightView
+        NavigationStack {
+            searchView
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    var leftView: some View {
+    var searchView: some View {
         VStack(alignment: .leading) {
-            HStack {
-                Spacer()
+            HStack(alignment: .center) {
                 Text("Combine Bonjour Sample")
                     .font(.headline)
                     .padding()
-                Spacer()
             }
 
-            HStack {
-                Spacer()
+            HStack(alignment: .center) {
                 TextField(
                     "Service Name",
                     text: Binding(
@@ -35,43 +29,37 @@ struct ContentView: View {
                         set: { viewModel.dispatch(.changeServiceToSearch($0)) }
                     )
                 )
+                .padding()
+
                 Button(action: { viewModel.dispatch(.toggleDiscovery) }) {
                     Text(viewModel.state.isDiscovering ? "Stop" : "Start")
                 }
-                Spacer()
+                .padding()
             }
 
-            if let errorMessage = viewModel.state.lastError {
-                Text(errorMessage)
-            }
+            viewModel.state.lastError.map { Text($0) }
+                .padding()
 
-            List {
-                ForEach(viewModel.state.discoveredServices) { service in
-                    Text(service.name)
-                        .foregroundColor(service.isVisible ? .primary : .secondary)
-                        .onTapGesture {
-                            viewModel.dispatch(.tapService(service))
-                        }
+            List(viewModel.state.discoveredServices) { service in
+                Text(service.name)
+                    .foregroundColor(service.isVisible ? .primary : .secondary)
+                    .onTapGesture {
+                        viewModel.dispatch(.tapService(service))
+                    }
+            }
+            .navigationDestination(isPresented: .init(get: { viewModel.state.selectedService != nil },
+                                                      set: { forward in if !forward { viewModel.dispatch(.backFromDetails) } })) {
+                viewModel.state.selectedService.map {
+                    serviceView(service: $0, extra: viewModel.state.resolvedService)
                 }
-                Spacer()
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder
-    var rightView: some View {
-        if let selected = viewModel.state.selectedService,
-           let service = viewModel.state.discoveredServices.first(where: { $0.id == selected.id }) {
-            serviceInfo(service: service, extra: selected.extraDetails)
-        } else {
-            Spacer()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-
-    func serviceInfo(service: DiscoveredService, extra: NWEndpointPublisher.ResolvedEndpoint?) -> some View {
+    func serviceView(service: DiscoveredService, extra: NWEndpointPublisher.ResolvedEndpoint?) -> some View {
         ScrollView {
             VStack(alignment: .leading) {
                 Text(service.name).font(.headline)
