@@ -90,7 +90,7 @@ extension NWEndpointPublisher {
     public enum ResolvedEndpoint: Equatable {
         public enum HostType: Equatable {
             case name(String)
-            case ip(IP)
+            case ip(NetworkExtensions.IP)
         }
 
         /// A host port endpoint represents an endpoint defined by the host and port.
